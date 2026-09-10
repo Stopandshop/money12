@@ -432,46 +432,45 @@
   }
 
   function saveSales() {
-    const selectedDate = document.getElementById('selectedDate').value;
-    const usdInput = document.getElementById('dailySalesUSD');
-    const lbpInput = document.getElementById('dailySalesLBP');
-    const wishInput = document.getElementById('dailySalesWish');
+  const selectedDate = document.getElementById('selectedDate').value;
+  const usdInput = document.getElementById('dailySalesUSD');
+  const lbpInput = document.getElementById('dailySalesLBP');
+  const wishInput = document.getElementById('dailySalesWish');
 
-    const usd = parseFloat(usdInput.value) || 0;
-    const lbp = parseFloat(lbpInput.value) || 0;
-    const wish = parseFloat(wishInput.value) || 0;
+  const usd = parseFloat(usdInput.value) || 0;
+  const lbp = parseFloat(lbpInput.value) || 0;
+  const wish = parseFloat(wishInput.value) || 0;
 
-    if (!selectedDate) {
-      alert('يرجى تحديد التاريخ أولاً.');
-      return;
-    }
-
-    if (usd === 0 && lbp === 0 && wish === 0) {
-      alert('يرجى إدخال مبلغ في واحدة من الخانات على الأقل.');
-      return;
-    }
-
-    const currentSales = salesData[selectedDate] || { usd: 0, lbp: 0, wish: 0 };
-    const updatedSales = {
-      usd: (currentSales.usd || 0) + usd,
-      lbp: (currentSales.lbp || 0) + lbp,
-      wish: (currentSales.wish || 0) + wish
-    };
-
-    // تفريغ المربعات فوراً قبل عملية الحفظ
-    usdInput.value = '';
-    lbpInput.value = '';
-    wishInput.value = '';
-
-    db.collection("sales").doc(selectedDate).set(updatedSales).then(() => {
-      // إظهار التنبيه باستخدام setTimeout لضمان تشغيله بعد تحديث الشاشة
-      setTimeout(() => {
-        alert("تم حفظ وإضافة المبيعات بنجاح! ✅");
-      }, 100);
-    }).catch(error => {
-      alert("حدث خطأ أثناء حفظ المبيعات: " + error.message);
-    });
+  if (!selectedDate) {
+    alert('يرجى تحديد التاريخ أولاً.');
+    return;
   }
+
+  if (usd === 0 && lbp === 0 && wish === 0) {
+    alert('يرجى إدخال مبلغ في واحدة من الخانات على الأقل.');
+    return;
+  }
+
+  // تفريغ الخانات فوراً لتجنب أي تعارض في الواجهة
+  usdInput.value = '';
+  lbpInput.value = '';
+  wishInput.value = '';
+
+  // استخدام FieldValue.increment لجمع المبالغ المضافة من أي جهاز بدقة وفي الوقت الفعلي
+  const salesRef = db.collection("sales").doc(selectedDate);
+  
+  salesRef.set({
+    usd: firebase.firestore.FieldValue.increment(usd),
+    lbp: firebase.firestore.FieldValue.increment(lbp),
+    wish: firebase.firestore.FieldValue.increment(wish)
+  }, { merge: true }).then(() => {
+    setTimeout(() => {
+      alert("تم حفظ وإضافة المبيعات بنجاح! ✅");
+    }, 100);
+  }).catch(error => {
+    alert("حدث خطأ أثناء حفظ المبيعات: " + error.message);
+  });
+}
 
   function resetDaySales() {
     const selectedDate = document.getElementById('selectedDate').value;
