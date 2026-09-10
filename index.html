@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>نظام إدارة وجدولة الفواتير والمبيعات</title>
+  
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, sans-serif; background-color: #f0f2f5; padding: 10px; margin: 0; direction: rtl; }
+    .container { max-width: 950px; margin: 0 auto; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    h2 { text-align: center; color: #1a252f; margin-bottom: 15px; font-size: 1.3em; }
+    
+    .rate-box { background: #eef6ff; border: 1px solid #b8daff; padding: 12px; border-radius: 8px; font-weight: bold; text-align: center; color: #004085; margin-bottom: 15px; display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; font-size: 0.95em; }
+    .rate-box input { width: 110px; padding: 8px; text-align: center; font-weight: bold; border: 1px solid #007bff; border-radius: 6px; font-size: 16px; }
+    
+    .date-filter-box { background: #fff3cd; border: 1px solid #ffeeba; padding: 12px; border-radius: 8px; font-weight: bold; text-align: center; color: #856404; margin-bottom: 15px; display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; font-size: 0.95em; }
+    .date-filter-box input { padding: 8px 10px; font-weight: bold; border: 1px solid #ffc107; border-radius: 6px; font-size: 16px; }
+
+    .sales-box { background: #e3f2fd; border: 1px solid #90caf9; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+    .sales-box h3 { margin-top: 0; color: #0d47a1; font-size: 1.05em; }
+
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 12px; }
+    .form-group { display: flex; flex-direction: column; }
+    label { margin-bottom: 5px; font-weight: 600; color: #333; font-size: 0.85em; }
+    input, select, button { padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 16px; box-sizing: border-box; }
+    input:focus, select:focus { border-color: #007bff; outline: none; }
+    
+    .btn-submit { background-color: #28a745; color: white; border: none; font-weight: bold; cursor: pointer; padding: 12px; margin-top: 8px; border-radius: 6px; width: 100%; font-size: 1em; }
+    .btn-submit:hover { background-color: #218838; }
+    
+    .btn-save-sales { background-color: #0288d1; color: white; border: none; font-weight: bold; cursor: pointer; padding: 12px; border-radius: 6px; width: 100%; font-size: 1em; }
+    .btn-save-sales:hover { background-color: #01579b; }
+
+    .btn-whatsapp { background-color: #25d366; color: white; border: none; font-weight: bold; cursor: pointer; padding: 12px; border-radius: 6px; width: 100%; font-size: 0.95em; margin-bottom: 15px; }
+    .btn-whatsapp:hover { background-color: #1eb857; }
+
+    .btn-action { background-color: #17a2b8; color: white; border: none; font-size: 0.85em; padding: 8px 12px; border-radius: 6px; cursor: pointer; }
+    .btn-action:hover { background-color: #138496; }
+
+    .btn-clear { background-color: #dc3545; color: white; border: none; font-size: 0.85em; padding: 8px 12px; border-radius: 6px; cursor: pointer; }
+    .btn-clear:hover { background-color: #c82333; }
+
+    .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 10px; border-radius: 6px; border: 1px solid #e9ecef; }
+    table { width: 100%; border-collapse: collapse; background: #fff; min-width: 600px; }
+    th, td { border: 1px solid #e9ecef; padding: 8px; text-align: center; font-size: 0.85em; }
+    th { background-color: #343a40; color: white; white-space: nowrap; }
+    tr:nth-child(even) { background-color: #f8f9fa; }
+
+    .status-badge { font-weight: bold; padding: 4px 6px; border-radius: 4px; display: inline-block; font-size: 0.8em; white-space: nowrap; }
+    .status-cash { color: #155724; background-color: #d4edda; }
+    .status-wish { color: #004085; background-color: #cce5ff; }
+    .status-credit { color: #721c24; background-color: #f8d7da; }
+
+    .btn-delete { background-color: #ff4d4d; color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8em; }
+    .btn-delete:hover { background-color: #cc0000; }
+
+    .summary-section { margin-top: 20px; }
+    .summary-title { font-size: 1em; font-weight: bold; color: #333; margin-bottom: 10px; border-bottom: 2px solid #007bff; padding-bottom: 5px; }
+    .summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 15px; }
+    .card { padding: 12px; border-radius: 8px; text-align: center; font-weight: bold; transition: all 0.3s ease; }
+    .card-purchases { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+    .card-sales { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .card-profit { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+    
+    .card-warning { background-color: #f8d7da !important; color: #721c24 !important; border: 1px solid #f5c6cb !important; }
+    
+    .card h4 { margin: 0 0 5px 0; font-size: 0.85em; }
+    .card .val { font-size: 1.05em; }
+    .card .percentage { font-size: 0.8em; margin-top: 4px; color: #555; }
+
+    .btn-order { background-color: #ff9800; color: white; border: none; font-weight: bold; cursor: pointer; padding: 12px; border-radius: 6px; width: 100%; font-size: 1em; margin-top: 8px; }
+    .btn-order:hover { background-color: #e68a00; }
+    .btn-convert { background-color: #28a745; color: white; border: none; padding: 6px 8px; border-radius: 4px; cursor: pointer; font-size: 0.8em; }
+    .btn-edit { background-color: #ffc107; color: #212529; border: none; padding: 6px 8px; border-radius: 4px; cursor: pointer; font-size: 0.8em; font-weight: bold; }
+    .btn-save-edit { background-color: #007bff; color: white; border: none; padding: 6px 8px; border-radius: 4px; cursor: pointer; font-size: 0.8em; }
+    .badge-pending { color: #856404; background-color: #fff3cd; }
+    .badge-received { color: #155724; background-color: #d4edda; }
+    .table-input { width: 100%; padding: 4px; text-align: center; border: 1px solid #007bff; border-radius: 4px; font-size: 14px; }
+
+    .action-group { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+
+    @media (max-width: 600px) {
+      body { padding: 5px; }
+      .container { padding: 12px; border-radius: 8px; }
+      .form-grid { grid-template-columns: 1fr; }
+      .summary-cards { grid-template-columns: 1fr; }
+      .action-group { flex-direction: column; }
+      .action-group button { width: 100% !important; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>إدارة الفواتير والمبيعات والأرباح</h2>
+
+  <!-- زر إرسال التقرير عبر واتساب -->
+  <button class="btn-whatsapp" onclick="sendWhatsAppSummary()">إرسال تقرير المبيعات والمشتريات عبر واتساب 📲</button>
+
+  <!-- سعر الصرف -->
+  <div class="rate-box">
+    <span>سعر الصرف (1 USD =):</span>
+    <input type="number" id="exchangeRate" value="90000" onchange="updateSettings()" oninput="convertInputs()">
+    <span>LBP</span>
+  </div>
+
+  <!-- تحديد اليوم المعروض -->
+  <div class="date-filter-box">
+    <span>عرض وتعديل بيانات يوم:</span>
+    <input type="date" id="selectedDate" onchange="loadDayData()">
+  </div>
+
+  <!-- قسم إدخال المبيعات اليومية -->
+  <div class="sales-box">
+    <h3>تسجيل/تحديث المبيعات اليومية</h3>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>مبيعات الكاش بالدولار ($)</label>
+        <input type="number" id="dailySalesUSD" placeholder="0.00" step="any">
+      </div>
+      <div class="form-group">
+        <label>مبيعات الكاش بالليرة (L.L)</label>
+        <input type="number" id="dailySalesLBP" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label>مبيعات الويش ماني (Wish $)</label>
+        <input type="number" id="dailySalesWish" placeholder="0.00" step="any">
+      </div>
+    </div>
+    <div class="action-group">
+      <button class="btn-save-sales" onclick="saveSales()">حفظ وإضافة المبيعات</button>
+      <button class="btn-clear" onclick="resetDaySales()">تصفير مبيعات اليوم 🔄</button>
+    </div>
+  </div>
+
+  <!-- قسم جدولة الطلبيات -->
+  <div style="background: #fff8e1; padding: 15px; border-radius: 8px; border: 1px solid #ffe082; margin-bottom: 20px;">
+    <h3 style="margin-top: 0; color: #b78103; font-size: 1.05em;">جدولة طلبية جديدة من مورد 📦</h3>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>اسم المورد / الشركة</label>
+        <input type="text" id="ordSupplier" placeholder="مثال: شركة المواد الغذائية">
+      </div>
+      <div class="form-group">
+        <label>تفاصيل البضاعة المطلوبة</label>
+        <input type="text" id="ordDetails" placeholder="مثال: 10 صناديق عصائر">
+      </div>
+      <div class="form-group">
+        <label>القيمة التقديرية ($)</label>
+        <input type="number" id="ordAmount" placeholder="0.00" step="any">
+      </div>
+      <div class="form-group">
+        <label>تاريخ الوصول المتوقع</label>
+        <input type="date" id="ordExpectedDate">
+      </div>
+    </div>
+    <button class="btn-order" onclick="addOrder()">+ جدولة وإضافة الطلبية</button>
+  </div>
+
+  <!-- جدول عرض الطلبيات المجدولة -->
+  <div style="margin-bottom: 25px;">
+    <h3 style="margin: 0; color: #495057; font-size: 1.05em;">سجل الطلبيات المجدولة (قابل للتعديل)</h3>
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>المورد</th>
+            <th>التفاصيل</th>
+            <th>القيمة ($)</th>
+            <th>المتوقع وصولها</th>
+            <th>الحالة</th>
+            <th>إجراءات</th>
+          </tr>
+        </thead>
+        <tbody id="ordersTable">
+          <!-- تدرج الطلبيات هنا -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- نموذج إدخال الفواتير -->
+  <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e9ecef; margin-bottom: 20px;">
+    <h3 style="margin-top: 0; color: #495057; font-size: 1.05em;">تسجيل فاتورة مشتريات/مورد</h3>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>اسم المورد / الشركة</label>
+        <input type="text" id="supplier" placeholder="مثال: شركة المواد الغذائية">
+      </div>
+
+      <div class="form-group">
+        <label>عملة الإدخال</label>
+        <select id="currency" onchange="convertInputs()">
+          <option value="USD">دولار أمريكي ($)</option>
+          <option value="LBP">ليرة لبنانية (L.L)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>المبلغ المدخل</label>
+        <input type="number" id="inputAmount" placeholder="0.00" step="any" oninput="convertInputs()">
+      </div>
+
+      <div class="form-group">
+        <label>المبلغ المقابل تلقائياً</label>
+        <input type="text" id="convertedAmount" placeholder="0" readonly style="background-color: #e9ecef;">
+      </div>
+
+      <div class="form-group">
+        <label>طريقة الدفع</label>
+        <select id="payStatus">
+          <option value="كاش">نقداً (كاش)</option>
+          <option value="Wish Money">ويش ماني (Wish)</option>
+          <option value="آجل">آجل (دين)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>تاريخ الاستحقاق (للدين)</label>
+        <input type="date" id="dueDate">
+      </div>
+    </div>
+    <button class="btn-submit" onclick="addInvoice()">+ تسجيل الفاتورة</button>
+  </div>
+
+  <hr style="margin-top: 25px; border: 0; border-top: 1px solid #eee;">
+
+  <!-- جدول عرض الفواتير -->
+  <div style="margin-top: 20px;">
+    <h3 style="margin: 0 0 10px 0; color: #495057; font-size: 1.05em;">سجل فواتير المشتريات لليوم المحدد</h3>
+    <div class="action-group" style="margin-bottom: 10px;">
+      <button class="btn-action" onclick="exportToCSV()">تصدير إكسل (CSV) 📊</button>
+      <button class="btn-clear" onclick="clearSelectedDayData()">مسح فواتير هذا اليوم 🗑️</button>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table>
+      <thead>
+        <tr>
+          <th>المورد</th>
+          <th>المبلغ ($)</th>
+          <th>المبلغ (L.L)</th>
+          <th>طريقة الدفع</th>
+          <th>تاريخ الاستحقاق</th>
+          <th>إجراء</th>
+        </tr>
+      </thead>
+      <tbody id="invoiceTable">
+        <!-- تدرج الفواتير هنا -->
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ملخص اليوم المحدد -->
+  <div class="summary-section">
+    <div class="summary-title">تقرير اليوم المحدد:</div>
+    <div class="summary-cards">
+      <div class="card card-purchases">
+        <h4>إجمالي المشتريات</h4>
+        <div class="val" id="dayPurchasesUSD">$0.00</div>
+        <div style="font-size: 0.85em;" id="dayPurchasesLBP">0 L.L</div>
+      </div>
+      <div class="card card-sales" id="daySalesCard">
+        <h4>إجمالي المبيعات (كاش + ويش)</h4>
+        <div class="val" id="daySalesUSD">$0.00</div>
+        <div style="font-size: 0.85em;" id="daySalesLBP">0 L.L</div>
+      </div>
+      <div class="card card-profit" id="dayProfitCard">
+        <h4>صافي الأرباح الفعلية</h4>
+        <div class="val" id="dayProfitUSD">$0.00</div>
+        <div style="font-size: 0.85em;" id="dayProfitLBP">0 L.L</div>
+        <div class="percentage" id="dayProfitPercent">نسبة الربح: 0%</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ملخص الشهر -->
+  <div class="summary-section">
+    <div class="summary-title" id="monthTitle">تقرير الشهر كاملاً:</div>
+    <div class="summary-cards">
+      <div class="card card-purchases">
+        <h4>مشتريات الشهر</h4>
+        <div class="val" id="monthPurchasesUSD">$0.00</div>
+        <div style="font-size: 0.85em;" id="monthPurchasesLBP">0 L.L</div>
+      </div>
+      <div class="card card-sales" id="monthSalesCard">
+        <h4>مبيعات الشهر الكليّة</h4>
+        <div class="val" id="monthSalesUSD">$0.00</div>
+        <div style="font-size: 0.85em;" id="monthSalesLBP">0 L.L</div>
+      </div>
+      <div class="card card-profit" id="monthProfitCard" style="background-color: #c3e6cb; color: #155724;">
+        <h4>أرباح الشهر الصافية</h4>
+        <div class="val" id="monthProfitUSD">$0.00</div>
+        <div style="font-size: 0.85em;" id="monthProfitLBP">0 L.L</div>
+        <div class="percentage" id="monthProfitPercent">نسبة الربح: 0%</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // تهيئة Firebase
+  const firebaseConfig = {
+  apiKey: "AIzaSyCs6r3p2GMFg-r5RvHJsDmvp4TCFlmoh-s",
+  authDomain: "money-cc5a8.firebaseapp.com",
+  projectId: "money-cc5a8",
+  storageBucket: "money-cc5a8.firebasestorage.app",
+  messagingSenderId: "499350098379",
+  appId: "1:499350098379:web:470fa48d1fc5e7cfbfe64e",
+  measurementId: "G-EPD2XSYE08"
+};
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+
+  // تفعيل التخزين المؤقت أوفلاين
+  db.enablePersistence().catch(err => {
+    console.log("Offline persistence error: ", err.code);
+  });
+
+  let EXCHANGE_RATE = 90000;
+  let invoices = [];
+  let salesData = {};
+  let orders = [];
+  let editingOrderId = null;
+
+  const PHONE_NUMBERS = ["96178954599", "96181479786"];
+
+  window.onload = function() {
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('selectedDate').value = today;
+
+    // المزامنة الحية لسعر الصرف
+    db.collection("settings").doc("rate").onSnapshot(doc => {
+      if (doc.exists) {
+        EXCHANGE_RATE = doc.data().rate || 90000;
+      } else {
+        db.collection("settings").doc("rate").set({ rate: 90000 });
+      }
+      document.getElementById('exchangeRate').value = EXCHANGE_RATE;
+      renderAll();
+    });
+
+    // المزامنة الحية للفواتير
+    db.collection("invoices").onSnapshot(snapshot => {
+      invoices = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderAll();
+    });
+
+    // المزامنة الحية للمبيعات
+    db.collection("sales").onSnapshot(snapshot => {
+      salesData = {};
+      snapshot.docs.forEach(doc => {
+        salesData[doc.id] = doc.data();
+      });
+      renderAll();
+    });
+
+    // المزامنة الحية للطلبيات
+    db.collection("orders").onSnapshot(snapshot => {
+      orders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderAll();
+    });
+  };
+
+  window.addEventListener('beforeunload', function (e) {
+    sendWhatsAppSummary(true);
+  });
+
+  function generateSummaryMessage() {
+    const selectedDate = document.getElementById('selectedDate').value;
+    const purchasesUSD = document.getElementById('dayPurchasesUSD').innerText;
+    const purchasesLBP = document.getElementById('dayPurchasesLBP').innerText;
+    const salesUSD = document.getElementById('daySalesUSD').innerText;
+    const salesLBP = document.getElementById('daySalesLBP').innerText;
+    const profitUSD = document.getElementById('dayProfitUSD').innerText;
+    const profitLBP = document.getElementById('dayProfitLBP').innerText;
+    const profitPercent = document.getElementById('dayProfitPercent').innerText;
+
+    const text = `📊 *تقرير الحسابات اليومي (${selectedDate})*\n` +
+                 `---------------------------\n` +
+                 `🛒 *إجمالي المشتريات:* ${purchasesUSD} (${purchasesLBP})\n` +
+                 `💰 *إجمالي المبيعات:* ${salesUSD} (${salesLBP})\n` +
+                 `📈 *صافي الربح الفعلي:* ${profitUSD} (${profitLBP})\n` +
+                 `📊 *${profitPercent}*\n` +
+                 `---------------------------\n` +
+                 `ملاحظة: تم إرسال التقرير تلقائياً.`;
+    return encodeURIComponent(text);
+  }
+
+  function sendWhatsAppSummary(isClosing = false) {
+    const encodedText = generateSummaryMessage();
+    
+    PHONE_NUMBERS.forEach(phone => {
+      const url = `https://api.whatsapp.com/send?phone=${phone}&text=${encodedText}`;
+      window.open(url, '_blank');
+    });
+  }
+
+  function updateSettings() {
+    const newRate = parseFloat(document.getElementById('exchangeRate').value);
+    if (!isNaN(newRate) && newRate > 0) {
+      EXCHANGE_RATE = newRate;
+      db.collection("settings").doc("rate").set({ rate: EXCHANGE_RATE });
+    }
+  }
+
+  function convertInputs() {
+    const currency = document.getElementById('currency').value;
+    const amount = parseFloat(document.getElementById('inputAmount').value);
+    const convertedInput = document.getElementById('convertedAmount');
+
+    if (isNaN(amount) || amount <= 0) {
+      convertedInput.value = '';
+      return;
+    }
+
+    if (currency === 'USD') {
+      const lbpVal = amount * EXCHANGE_RATE;
+      convertedInput.value = lbpVal.toLocaleString('en-US') + ' L.L';
+    } else {
+      const usdVal = amount / EXCHANGE_RATE;
+      convertedInput.value = '$' + usdVal.toFixed(2);
+    }
+  }
+
+  function saveSales() {
+  const selectedDate = document.getElementById('selectedDate').value;
+  const usdInput = document.getElementById('dailySalesUSD');
+  const lbpInput = document.getElementById('dailySalesLBP');
+  const wishInput = document.getElementById('dailySalesWish');
+
+  const usd = parseFloat(usdInput.value) || 0;
+  const lbp = parseFloat(lbpInput.value) || 0;
+  const wish = parseFloat(wishInput.value) || 0;
+
+  if (!selectedDate) {
+    alert('يرجى تحديد التاريخ أولاً.');
+    return;
+  }
+
+  if (usd === 0 && lbp === 0 && wish === 0) {
+    alert('يرجى إدخال مبلغ في واحدة من الخانات على الأقل.');
+    return;
+  }
+
+  // استخدام FieldValue المباشر للدمج والتحديث المتزامن
+  const incrementUSD = firebase.firestore.FieldValue.increment(usd);
+  const incrementLBP = firebase.firestore.FieldValue.increment(lbp);
+  const incrementWish = firebase.firestore.FieldValue.increment(wish);
+
+  db.collection("sales").doc(selectedDate).set({
+    usd: incrementUSD,
+    lbp: incrementLBP,
+    wish: incrementWish
+  }, { merge: true }).then(() => {
+    // تفريغ الخانات فقط بعد نجاح الحفظ
+    usdInput.value = '';
+    lbpInput.value = '';
+    wishInput.value = '';
+    alert("تم حفظ وإضافة المبيعات بنجاح! ✅");
+  }).catch(error => {
+    alert("حدث خطأ أثناء الحفظ: " + error.message);
+  });
+}
+
+  function resetDaySales() {
+    const selectedDate = document.getElementById('selectedDate').value;
+    if (confirm(`هل أنت تأكد من مسح مبيعات يوم (${selectedDate}) بالكامل لتصفير المجموع؟`)) {
+      db.collection("sales").doc(selectedDate).set({ usd: 0, lbp: 0, wish: 0 }).then(() => {
+        document.getElementById('dailySalesUSD').value = '';
+        document.getElementById('dailySalesLBP').value = '';
+        document.getElementById('dailySalesWish').value = '';
+      });
+    }
+  }
+
+  function loadDayData() {
+    document.getElementById('dailySalesUSD').value = '';
+    document.getElementById('dailySalesLBP').value = '';
+    document.getElementById('dailySalesWish').value = '';
+    renderAll();
+  }
+
+  function addInvoice() {
+    const supplier = document.getElementById('supplier').value.trim();
+    const currency = document.getElementById('currency').value;
+    const amount = parseFloat(document.getElementById('inputAmount').value);
+    const payStatus = document.getElementById('payStatus').value;
+    const date = document.getElementById('selectedDate').value;
+    const dueDate = document.getElementById('dueDate').value || '-';
+
+    if (!date) { alert('يرجى اختيار التاريخ أولاً.'); return; }
+    if (!supplier || isNaN(amount) || amount <= 0) { alert('يرجى إدخال البيانات بشكل صحيح.'); return; }
+
+    let amountUSD = currency === 'USD' ? amount : amount / EXCHANGE_RATE;
+    let amountLBP = currency === 'LBP' ? amount : amount * EXCHANGE_RATE;
+
+    const newInvoice = {
+      date: date,
+      supplier: supplier,
+      usd: amountUSD,
+      lbp: amountLBP,
+      status: payStatus,
+      dueDate: dueDate,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    db.collection("invoices").add(newInvoice).then(() => {
+      document.getElementById('supplier').value = '';
+      document.getElementById('inputAmount').value = '';
+      document.getElementById('convertedAmount').value = '';
+      document.getElementById('dueDate').value = '';
+      setTimeout(() => {
+        alert("تم تسجيل الفاتورة بنجاح! 📑");
+      }, 100);
+    }).catch(error => {
+      alert("حدث خطأ أثناء حفظ الفاتورة: " + error.message);
+    });
+  }
+
+  function deleteInvoice(id) {
+    if (confirm('هل أنت تأكد من حذف هذه الفاتورة؟')) {
+      db.collection("invoices").doc(id).delete();
+    }
+  }
+
+  function addOrder() {
+    const supplier = document.getElementById('ordSupplier').value.trim();
+    const details = document.getElementById('ordDetails').value.trim();
+    const amount = parseFloat(document.getElementById('ordAmount').value) || 0;
+    const expectedDate = document.getElementById('ordExpectedDate').value || '-';
+
+    if (!supplier) { alert('يرجى كتابة اسم المورد.'); return; }
+
+    const newOrder = {
+      supplier: supplier,
+      details: details,
+      amount: amount,
+      expectedDate: expectedDate,
+      status: 'قيد الانتظار',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    db.collection("orders").add(newOrder).then(() => {
+      document.getElementById('ordSupplier').value = '';
+      document.getElementById('ordDetails').value = '';
+      document.getElementById('ordAmount').value = '';
+      document.getElementById('ordExpectedDate').value = '';
+    });
+  }
+
+  function enableOrderEdit(id) {
+    editingOrderId = id;
+    renderAll();
+  }
+
+  function saveOrderEdit(id) {
+    const newSupplier = document.getElementById(`edit-sup-${id}`).value.trim();
+    const newDetails = document.getElementById(`edit-det-${id}`).value.trim();
+    const newAmount = parseFloat(document.getElementById(`edit-amt-${id}`).value) || 0;
+    const newDate = document.getElementById(`edit-date-${id}`).value || '-';
+
+    if (!newSupplier) { alert('يرجى إدخال اسم المورد'); return; }
+
+    db.collection("orders").doc(id).update({
+      supplier: newSupplier,
+      details: newDetails,
+      amount: newAmount,
+      expectedDate: newDate
+    }).then(() => {
+      editingOrderId = null;
+    });
+  }
+
+  function convertOrderToInvoice(id) {
+    const order = orders.find(o => o.id === id);
+    if (!order) return;
+
+    const selectedDate = document.getElementById('selectedDate').value;
+    
+    const newInvoice = {
+      date: selectedDate,
+      supplier: order.supplier + (order.details ? ' (' + order.details + ')' : ''),
+      usd: order.amount,
+      lbp: order.amount * EXCHANGE_RATE,
+      status: 'كاش',
+      dueDate: '-',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+
+    db.collection("invoices").add(newInvoice).then(() => {
+      return db.collection("orders").doc(id).update({ status: 'تم الاستلام' });
+    }).then(() => {
+      setTimeout(() => {
+        alert('تم تحويل الطلبية إلى فاتورة مشتريات بالمبلغ النهائى بنجاح!');
+      }, 100);
+    });
+  }
+
+  function deleteOrder(id) {
+    if (confirm('هل أنت تأكد من حذف هذه الطلبية؟')) {
+      db.collection("orders").doc(id).delete();
+    }
+  }
+
+  function renderAll() {
+    const selectedDate = document.getElementById('selectedDate').value;
+    const tableBody = document.getElementById('invoiceTable');
+    tableBody.innerHTML = '';
+
+    const ordersTable = document.getElementById('ordersTable');
+    ordersTable.innerHTML = '';
+    orders.forEach(ord => {
+      const isReceived = ord.status === 'تم الاستلام';
+      const isEditing = editingOrderId === ord.id;
+      const badgeClass = isReceived ? 'badge-received' : 'badge-pending';
+
+      const row = document.createElement('tr');
+
+      if (isEditing) {
+        row.innerHTML = `
+          <td><input type="text" id="edit-sup-${ord.id}" class="table-input" value="${ord.supplier}"></td>
+          <td><input type="text" id="edit-det-${ord.id}" class="table-input" value="${ord.details}"></td>
+          <td><input type="number" id="edit-amt-${ord.id}" class="table-input" value="${ord.amount}" step="any"></td>
+          <td><input type="date" id="edit-date-${ord.id}" class="table-input" value="${ord.expectedDate !== '-' ? ord.expectedDate : ''}"></td>
+          <td><span class="status-badge ${badgeClass}">${ord.status}</span></td>
+          <td style="display:flex; gap:4px; justify-content:center;">
+            <button class="btn-save-edit" onclick="saveOrderEdit('${ord.id}')">حفظ 💾</button>
+            <button class="btn-delete" onclick="editingOrderId=null; renderAll();">إلغاء ❌</button>
+          </td>
+        `;
+      } else {
+        row.innerHTML = `
+          <td><strong>${ord.supplier}</strong></td>
+          <td>${ord.details || '-'}</td>
+          <td>$${(ord.amount || 0).toFixed(2)}</td>
+          <td>${ord.expectedDate}</td>
+          <td><span class="status-badge ${badgeClass}">${ord.status}</span></td>
+          <td style="display:flex; gap:4px; justify-content:center; flex-wrap:wrap;">
+            ${!isReceived ? `
+              <button class="btn-edit" onclick="enableOrderEdit('${ord.id}')">تعديل ✏️</button>
+              <button class="btn-convert" onclick="convertOrderToInvoice('${ord.id}')">استلام 📥</button>
+            ` : ''}
+            <button class="btn-delete" onclick="deleteOrder('${ord.id}')">حذف ❌</button>
+          </td>
+        `;
+      }
+      ordersTable.appendChild(row);
+    });
+
+    if (!selectedDate) return;
+
+    const currentMonth = selectedDate.substring(0, 7);
+    document.getElementById('monthTitle').innerText = `تقرير شهر (${currentMonth}) كاملاً:`;
+
+    let dayPurchasesUSD = 0, dayPurchasesLBP = 0;
+    let monthPurchasesUSD = 0, monthPurchasesLBP = 0;
+
+    invoices.forEach(inv => {
+      if (inv.date && inv.date.startsWith(currentMonth)) {
+        monthPurchasesUSD += inv.usd || 0;
+        monthPurchasesLBP += inv.lbp || 0;
+      }
+
+      if (inv.date === selectedDate) {
+        dayPurchasesUSD += inv.usd || 0;
+        dayPurchasesLBP += inv.lbp || 0;
+
+        let badgeClass = 'status-cash';
+        if (inv.status === 'Wish Money') badgeClass = 'status-wish';
+        if (inv.status === 'آجل') badgeClass = 'status-credit';
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td><strong>${inv.supplier}</strong></td>
+          <td>$${(inv.usd || 0).toFixed(2)}</td>
+          <td>${Math.round(inv.lbp || 0).toLocaleString('en-US')} L.L</td>
+          <td><span class="status-badge ${badgeClass}">${inv.status}</span></td>
+          <td>${inv.dueDate || '-'}</td>
+          <td><button class="btn-delete" onclick="deleteInvoice('${inv.id}')">حذف ❌</button></td>
+        `;
+        tableBody.appendChild(row);
+      }
+    });
+
+    let sDay = salesData[selectedDate] || { usd: 0, lbp: 0, wish: 0 };
+    let daySalesUSD = (sDay.usd || 0) + (sDay.wish || 0) + ((sDay.lbp || 0) / EXCHANGE_RATE);
+    let daySalesLBP = daySalesUSD * EXCHANGE_RATE;
+
+    let monthSalesUSD = 0;
+    Object.keys(salesData).forEach(date => {
+      if (date.startsWith(currentMonth)) {
+        let s = salesData[date];
+        let usdVal = (s.usd || 0) + (s.wish || 0) + ((s.lbp || 0) / EXCHANGE_RATE);
+        monthSalesUSD += usdVal;
+      }
+    });
+    
+    let monthSalesLBP = monthSalesUSD * EXCHANGE_RATE;
+
+    let dayProfitUSD = daySalesUSD - dayPurchasesUSD;
+    let dayProfitLBP = daySalesLBP - dayPurchasesLBP;
+
+    let monthProfitUSD = monthSalesUSD - monthPurchasesUSD;
+    let monthProfitLBP = monthSalesLBP - monthPurchasesLBP;
+
+    let dayProfitPctVal = daySalesUSD > 0 ? ((dayProfitUSD / daySalesUSD) * 100).toFixed(1) : 0;
+    let monthProfitPctVal = monthSalesUSD > 0 ? ((monthProfitUSD / monthSalesUSD) * 100).toFixed(1) : 0;
+
+    document.getElementById('dayPurchasesUSD').innerText = '$' + dayPurchasesUSD.toFixed(2);
+    document.getElementById('dayPurchasesLBP').innerText = Math.round(dayPurchasesLBP).toLocaleString('en-US') + ' L.L';
+    document.getElementById('daySalesUSD').innerText = '$' + daySalesUSD.toFixed(2);
+    document.getElementById('daySalesLBP').innerText = Math.round(daySalesLBP).toLocaleString('en-US') + ' L.L';
+    document.getElementById('dayProfitUSD').innerText = '$' + dayProfitUSD.toFixed(2);
+    document.getElementById('dayProfitLBP').innerText = Math.round(dayProfitLBP).toLocaleString('en-US') + ' L.L';
+    document.getElementById('dayProfitPercent').innerText = `نسبة الربح: ${dayProfitPctVal}%`;
+
+    document.getElementById('monthPurchasesUSD').innerText = '$' + monthPurchasesUSD.toFixed(2);
+    document.getElementById('monthPurchasesLBP').innerText = Math.round(monthPurchasesLBP).toLocaleString('en-US') + ' L.L';
+    document.getElementById('monthSalesUSD').innerText = '$' + monthSalesUSD.toFixed(2);
+    document.getElementById('monthSalesLBP').innerText = Math.round(monthSalesLBP).toLocaleString('en-US') + ' L.L';
+    document.getElementById('monthProfitUSD').innerText = '$' + monthProfitUSD.toFixed(2);
+    document.getElementById('monthProfitLBP').innerText = Math.round(monthProfitLBP).toLocaleString('en-US') + ' L.L';
+    document.getElementById('monthProfitPercent').innerText = `نسبة الربح: ${monthProfitPctVal}%`;
+
+    const dayProfitCard = document.getElementById('dayProfitCard');
+    const daySalesCard = document.getElementById('daySalesCard');
+    if (dayPurchasesUSD > daySalesUSD) {
+      dayProfitCard.classList.add('card-warning');
+      daySalesCard.classList.add('card-warning');
+    } else {
+      dayProfitCard.classList.remove('card-warning');
+      daySalesCard.classList.remove('card-warning');
+    }
+
+    const monthProfitCard = document.getElementById('monthProfitCard');
+    const monthSalesCard = document.getElementById('monthSalesCard');
+    if (monthPurchasesUSD > monthSalesUSD) {
+      monthProfitCard.classList.add('card-warning');
+      monthSalesCard.classList.add('card-warning');
+    } else {
+      monthProfitCard.classList.remove('card-warning');
+      monthSalesCard.classList.remove('card-warning');
+    }
+  }
+
+  function clearSelectedDayData() {
+    const selectedDate = document.getElementById('selectedDate').value;
+    if (confirm(`هل أنت تأكد من مسح جميع فواتير يوم (${selectedDate})؟`)) {
+      const dayInvoices = invoices.filter(inv => inv.date === selectedDate);
+      const batch = db.batch();
+      dayInvoices.forEach(inv => {
+        const ref = db.collection("invoices").doc(inv.id);
+        batch.delete(ref);
+      });
+      batch.commit();
+    }
+  }
+
+  function exportToCSV() {
+    if (invoices.length === 0) {
+      alert('لا توجد فواتير لتصديرها.');
+      return;
+    }
+    let csvContent = "\uFEFFالتاريخ,المورد,المبلغ بالدولار,المبلغ بالليرة,طريقة الدفع,تاريخ الاستحقاق\n";
+    invoices.forEach(inv => {
+      csvContent += `"${inv.date}","${inv.supplier}","${(inv.usd || 0).toFixed(2)}","${inv.lbp}","${inv.status}","${inv.dueDate || '-'}"\n`;
+    });
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `Invoices_Report_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  }
+</script>
